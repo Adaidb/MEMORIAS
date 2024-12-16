@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulador de Gestión de Memoria</title>
+    <style>
+           body{
+            font-family: Arial, sans-serif;
+            margin: 0;
+            background-color: rgb(26, 26, 54); /* Fondo rosa claro */
+            color: #f0f0f0;
+            display: flex;
+    
+            align-items: center; /* Centrar verticalmente */          
+            flex-direction: column; /*
+           }
+           
+
+   
+        .container {
+            background-color: #1f2d3d; /* Fondo oscuro */
+            width: 90%;
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 20px;
+            color: #f0f0f0;
+            font-size: 2rem;
+        }
+
+        /* Input y botones */
+        .input-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #f0f0f0;
+            text-align: center;
+          
+        }
+
+        input, select {
+            width: 90%;
+            padding: 8px;
+            margin-bottom: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            
+        }
+
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            width: 40%;
+            font-size: 1rem;
+            transition: background 0.3s;
+            display: flex;
+            
+        }
+
+        button:hover {
+            background-color: #2980b9;
+        }
+
+        /* Estado de memoria */
+        #memory-graph {
+            border: 1px solid #2c3e50;
+          
+            width: 20%;
+            height: 300px;
+            position: relative;
+            margin-top: 20px;
+        }
+
+        .block {
+            position: absolute;
+            text-align: center;
+            border: 1px solid black;
+            overflow: hidden;
+            font-size: 0.8rem;
+        }
+
+        .free {
+            background-color: #95a5a6; /* Gris */
+        }
+
+        .job {
+            background-color: #3498db; /* Azul */
+            color: white;
+        }
+
+        .so {
+            background-color: #e74c3c; /* Rojo */
+            color: white;
+        }
+
+        #free-memory, #waitlist-label {
+            text-align: center;
+            margin-top: 10px;
+            font-size: 1rem;
+            color: #2ecc71; /* Verde */
+        }
+
+        hr {
+            border: 0;
+            height: 1px;
+            background: #ccc;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Simulador de Gestión de Memoria</h1>
+    
+    <!-- Entrada de Memoria -->
+    <div class="input-group">
+        <label>Tamaño de Memoria: </label>
+        <input type="number" id="memorySize" oninput="updateMemory()" min="1" />
+        <select id="memoryUnit" onchange="updateMemory()">
+            <option value="KB">KB</option>
+            <option value="MB">MB</option>
+            <option value="GB">GB</option>
+        </select>
+    </div>
+
+    <!-- Tamaño del SO -->
+    <div class="input-group">
+        <label>Tamaño del Sistema Operativo: </label>
+        <input type="number" id="osSize" oninput="updateOS()" min="1" />
+        <select id="osUnit" onchange="updateOS()">
+            <option value="KB">KB</option>
+            <option value="MB">MB</option>
+            <option value="GB">GB</option>
+        </select>
+        <span id="osError" style="color:red;"></span>
+    </div>
+
+    <!-- Añadir Trabajos -->
+    <div class="input-group">
+        <label>Nombre del Trabajo: </label>
+        <input type="text" id="jobName" />
+        <label>Tamaño del Trabajo: </label>
+        <input type="number" id="jobSize" min="1" />
+        <select id="jobUnit">
+            <option value="KB">KB</option>
+            <option value="MB">MB</option>
+            <option value="GB">GB</option>
+        </select>
+        <button onclick="addJob()">Añadir Trabajo</button>
+    </div>
+
+    <!-- Memoria Libre -->
+    <div id="free-memory">Memoria Libre: 0 MB</div>
+
+    <!-- Representación de Memoria -->
+    <div id="memory-graph"></div>
+    <div id="waitlist-label" style="margin-top: 10px; font-size: 1em; color: white;">
+        Lista de Espera: Ninguna
+    </div>
+    
+
+    <script>
+        let memorySize = 0;
+        let osSize = 0;
+        let freeAreas = [];
+        let jobsInMemory = [];
+
+        function updateMemory() {
+            const size = parseInt(document.getElementById('memorySize').value) || 0;
+            const unit = document.getElementById('memoryUnit').value;
+            memorySize = convertToKB(size, unit);
+
+            if (memorySize > 0) {
+                freeAreas = [{ start: 0, size: memorySize }];
+                jobsInMemory = [];
+                drawMemory();
+                updateFreeMemory();
+            }
+        }
+
+        function updateOS() {
+    const size = parseInt(document.getElementById('osSize').value) || 0;
+    const unit = document.getElementById('osUnit').value;
+    const osError = document.getElementById('osError');
+
+    osError.textContent = "";
+    const newSize = convertToKB(size, unit);
+
+    // Validar que el SO no exceda el 30% de la memoria
+    if (newSize > memorySize * 0.3) {
+        osError.textContent = "El SO no puede exceder el 30% de la memoria.";
+        return;
+    }
+
+    // Verificar si el SO ya existe y liberarlo
+    let existingSO = jobsInMemory.find(job => job.name === "SO");
+    if (existingSO) {
+        freeAreas.push({ start: existingSO.start, size: existingSO.size });
+        jobsInMemory = jobsInMemory.filter(job => job.name !== "SO");
+        mergeFreeAreas();
+    }
+
+    // Agregar el SO a la memoria
+    osSize = newSize;
+    freeAreas = [{ start: osSize, size: memorySize - osSize }];
+    jobsInMemory.push({ name: "SO", size: osSize, start: 0 });
+    
+    drawMemory();
+    updateFreeMemory();
+}
+
+        let waitList = []; // Lista de trabajos en espera
+
+function addJob() {
+    const name = document.getElementById('jobName').value.trim();
+    const size = parseInt(document.getElementById('jobSize').value) || 0;
+    const unit = document.getElementById('jobUnit').value;
+    const jobSize = convertToKB(size, unit);
+
+    if (!name || jobSize <= 0) {
+        alert("Nombre o tamaño del trabajo inválido.");
+        return;
+    }
+
+    // Liberar si el trabajo ya existe
+    let existingJob = jobsInMemory.find(job => job.name === name);
+    if (existingJob) {
+        freeAreas.push({ start: existingJob.start, size: existingJob.size });
+        jobsInMemory = jobsInMemory.filter(job => job.name !== name);
+        mergeFreeAreas();
+        drawMemory();
+        updateFreeMemory();
+        checkWaitList(); // Revisar lista de espera después de liberar espacio
+        return;
+    }
+
+    // Verificar si hay suficiente memoria
+    const totalFree = freeAreas.reduce((sum, area) => sum + area.size, 0);
+    if (totalFree >= jobSize) {
+        compactMemory();
+        if (!assignJob({ name: name, size: jobSize })) {
+            waitList.push({ name, size: jobSize });
+            updateWaitList();
+        }
+    } else {
+        waitList.push({ name, size: jobSize });
+        updateWaitList();
+    }
+}
+
+function compactMemory() {
+    let position = osSize;
+    jobsInMemory.sort((a, b) => a.start - b.start);
+    for (let job of jobsInMemory) {
+        job.start = position;
+        position += job.size;
+    }
+    freeAreas = [{ start: position, size: memorySize - position }];
+    mergeFreeAreas();
+    drawMemory();
+    updateFreeMemory();
+}
+
+function checkWaitList() {
+    let waitListUpdated = [];
+    waitList.forEach(job => {
+        const totalFree = freeAreas.reduce((sum, area) => sum + area.size, 0);
+        if (totalFree >= job.size) {
+            compactMemory(); // Compactar bloques si necesario
+            if (!assignJob(job)) {
+                waitListUpdated.push(job); // Si aún no entra, mantener en la lista de espera
+            }
+        } else {
+            waitListUpdated.push(job);
+        }
+    });
+    waitList = waitListUpdated;
+    updateWaitList();
+}
+
+function updateWaitList() {
+    const waitListLabel = document.getElementById('waitlist-label');
+    if (waitList.length > 0) {
+        const jobs = waitList.map(job => `${job.name} (${(job.size / 1024).toFixed(2)} MB)`);
+        waitListLabel.textContent = `Lista de Espera: ${jobs.join(", ")}`;
+    } else {
+        waitListLabel.textContent = "Lista de Espera: Ninguna";
+    }
+}
+
+
+
+
+        
+
+        function assignJob(job) {
+            for (let i = 0; i < freeAreas.length; i++) {
+                if (freeAreas[i].size >= job.size) {
+                    job.start = freeAreas[i].start;
+                    jobsInMemory.push(job);
+                    freeAreas[i].start += job.size;
+                    freeAreas[i].size -= job.size;
+                    if (freeAreas[i].size === 0) freeAreas.splice(i, 1);
+                    drawMemory();
+                    updateFreeMemory();
+                    return true;
+                }
+            }
+            return false; // No se pudo asignar
+        }
+
+        function mergeFreeAreas() {
+            freeAreas.sort((a, b) => a.start - b.start);
+            for (let i = 0; i < freeAreas.length - 1; i++) {
+                if (freeAreas[i].start + freeAreas[i].size === freeAreas[i + 1].start) {
+                    freeAreas[i].size += freeAreas[i + 1].size;
+                    freeAreas.splice(i + 1, 1);
+                    i--;
+                }
+            }
+        }
+
+        function drawMemory() {
+            const graph = document.getElementById('memory-graph');
+            graph.innerHTML = '';
+            const scale = graph.clientHeight / memorySize;
+
+            jobsInMemory.forEach(job => {
+                const block = createBlock(job.start, job.size, scale, "job", `${job.name} (${job.size} KB)`);
+                graph.appendChild(block);
+            });
+
+            freeAreas.forEach(area => {
+                const block = createBlock(area.start, area.size, scale, "free", `Libre (${area.size} KB)`);
+                graph.appendChild(block);
+            });
+        }
+
+        function createBlock(start, size, scale, type, text) {
+            const div = document.createElement('div');
+            div.className = `block ${type}`;
+            div.style.top = (start * scale) + "px";
+            div.style.height = (size * scale) + "px";
+            div.textContent = text;
+            return div;
+        }
+
+        function updateFreeMemory() {
+    const totalFree = freeAreas.reduce((sum, area) => sum + area.size, 0);
+    document.getElementById('free-memory').textContent = 
+        `Memoria Libre: ${(totalFree / 1024).toFixed(2)} MB`;
+}
+
+
+        function convertToKB(size, unit) {
+    switch (unit) {
+        case "MB": return size * 1024; // 1 MB = 1024 KB
+        case "GB": return size * 1024 * 1024; // 1 GB = 1024 * 1024 KB
+        default: return size; // KB por defecto
+    }
+}
+
+    </script>
+</body>
+</html>
