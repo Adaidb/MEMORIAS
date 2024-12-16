@@ -192,40 +192,10 @@
             }
         }
 
-        function updateOS() {
-    const size = parseInt(document.getElementById('osSize').value) || 0;
-    const unit = document.getElementById('osUnit').value;
-    const osError = document.getElementById('osError');
-
-    osError.textContent = "";
-    const newSize = convertToKB(size, unit);
-
-    // Validar que el SO no exceda el 30% de la memoria
-    if (newSize > memorySize * 0.3) {
-        osError.textContent = "El SO no puede exceder el 30% de la memoria.";
-        return;
-    }
-
-    // Verificar si el SO ya existe y liberarlo
-    let existingSO = jobsInMemory.find(job => job.name === "SO");
-    if (existingSO) {
-        freeAreas.push({ start: existingSO.start, size: existingSO.size });
-        jobsInMemory = jobsInMemory.filter(job => job.name !== "SO");
-        mergeFreeAreas();
-    }
-
-    // Agregar el SO a la memoria
-    osSize = newSize;
-    freeAreas = [{ start: osSize, size: memorySize - osSize }];
-    jobsInMemory.push({ name: "SO", size: osSize, start: 0 });
-    
-    drawMemory();
-    updateFreeMemory();
-}
-
+        
         let waitList = []; // Lista de trabajos en espera
 
-function addJob() {
+        function addJob() {
     const name = document.getElementById('jobName').value.trim();
     const size = parseInt(document.getElementById('jobSize').value) || 0;
     const unit = document.getElementById('jobUnit').value;
@@ -236,7 +206,7 @@ function addJob() {
         return;
     }
 
-    // Liberar si el trabajo ya existe
+    // Verificar si el trabajo ya existe y liberarlo
     let existingJob = jobsInMemory.find(job => job.name === name);
     if (existingJob) {
         freeAreas.push({ start: existingJob.start, size: existingJob.size });
@@ -253,8 +223,7 @@ function addJob() {
     if (totalFree >= jobSize) {
         compactMemory();
         if (!assignJob({ name: name, size: jobSize })) {
-            waitList.push({ name, size: jobSize });
-            updateWaitList();
+            alert("Error inesperado al asignar el trabajo.");
         }
     } else {
         waitList.push({ name, size: jobSize });
@@ -262,12 +231,65 @@ function addJob() {
     }
 }
 
+  function assignJob(job) {
+    for (let i = 0; i < freeAreas.length; i++) {
+        if (freeAreas[i].size >= job.size) {
+            job.start = freeAreas[i].start;
+            jobsInMemory.push(job);
+            freeAreas[i].start += job.size;
+            freeAreas[i].size -= job.size;
+            if (freeAreas[i].size === 0) freeAreas.splice(i, 1);
+            drawMemory();
+            updateFreeMemory();
+            return true;
+        }
+    }
+    return false; // No se pudo asignar
+  }
+  function updateOS() {
+    const size = parseInt(document.getElementById('osSize').value) || 0;
+    const unit = document.getElementById('osUnit').value;
+    const osError = document.getElementById('osError');
+
+    osError.textContent = "";
+    const newSize = convertToKB(size, unit);
+
+    // Validar que el SO no exceda el 30% de la memoria
+    if (newSize > memorySize * 0.3) {
+        osError.textContent = "El SO no puede exceder el 30% de la memoria.";
+        return;
+    }
+
+    // Liberar el espacio actual del SO si ya está asignado
+    let existingSO = jobsInMemory.find(job => job.name === "SO");
+    if (existingSO) {
+        freeAreas.push({ start: existingSO.start, size: existingSO.size });
+        jobsInMemory = jobsInMemory.filter(job => job.name !== "SO");
+        mergeFreeAreas();
+    }
+
+    // Asignar espacio al SO
+    osSize = newSize;
+
+    // Asignar el SO como un trabajo en memoria
+    jobsInMemory.push({ name: "SO", size: osSize, start: 0 });
+
+    // Ajustar áreas libres considerando el SO
+    freeAreas = [{ start: osSize, size: memorySize - osSize }];
+
+    drawMemory();
+    updateFreeMemory();
+}
+
+
 function compactMemory() {
-    let position = osSize;
+    let position = osSize; // Comienza después del SO
     jobsInMemory.sort((a, b) => a.start - b.start);
     for (let job of jobsInMemory) {
-        job.start = position;
-        position += job.size;
+        if (job.name !== "SO") {
+            job.start = position;
+            position += job.size;
+        }
     }
     freeAreas = [{ start: position, size: memorySize - position }];
     mergeFreeAreas();
@@ -307,21 +329,6 @@ function updateWaitList() {
 
         
 
-        function assignJob(job) {
-            for (let i = 0; i < freeAreas.length; i++) {
-                if (freeAreas[i].size >= job.size) {
-                    job.start = freeAreas[i].start;
-                    jobsInMemory.push(job);
-                    freeAreas[i].start += job.size;
-                    freeAreas[i].size -= job.size;
-                    if (freeAreas[i].size === 0) freeAreas.splice(i, 1);
-                    drawMemory();
-                    updateFreeMemory();
-                    return true;
-                }
-            }
-            return false; // No se pudo asignar
-        }
 
         function mergeFreeAreas() {
             freeAreas.sort((a, b) => a.start - b.start);
